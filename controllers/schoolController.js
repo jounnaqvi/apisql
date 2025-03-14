@@ -17,36 +17,47 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 // Add School API
-exports.addSchool = (req, res) => {
+exports.addSchool = async (req, res) => {
   const { name, address, latitude, longitude } = req.body;
   if (!name || !address || !latitude || !longitude) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
-  const query = "INSERT INTO schools (name, address, latitude, longitude) VALUES (?, ?, ?, ?)";
-  db.query(query, [name, address, latitude, longitude], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const query = "INSERT INTO schools (name, address, latitude, longitude) VALUES (?, ?, ?, ?)";
+    const [result] = await db.query(query, [name, address, latitude, longitude]);
+
     res.status(201).json({ message: "School added successfully", id: result.insertId });
-  });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };
 
 // List Schools API
-exports.listSchools = (req, res) => {
+exports.listSchools = async (req, res) => {
   const { latitude, longitude } = req.query;
   if (!latitude || !longitude) {
     return res.status(400).json({ error: "Latitude and Longitude are required" });
   }
 
-  const query = "SELECT * FROM schools";
-  db.query(query, (err, schools) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const query = "SELECT * FROM schools";
+    const [schools] = await db.query(query);
+
+    // Convert string coordinates to numbers
+    const userLat = parseFloat(latitude);
+    const userLon = parseFloat(longitude);
 
     // Calculate distances and sort
-    schools.forEach((school) => {
-      school.distance = calculateDistance(latitude, longitude, school.latitude, school.longitude);
-    });
-    schools.sort((a, b) => a.distance - b.distance);
+    const sortedSchools = schools
+      .map((school) => ({
+        ...school,
+        distance: calculateDistance(userLat, userLon, school.latitude, school.longitude),
+      }))
+      .sort((a, b) => a.distance - b.distance);
 
-    res.json({ schools });
-  });
+    res.json({ schools: sortedSchools });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };
